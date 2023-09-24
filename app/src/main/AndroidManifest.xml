@@ -1,20 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-	package="com.artifex.mupdf.viewer.app"
-	android:installLocation="auto"
-	>
-	<application
-		android:label="MuPDF viewer"
-		android:icon="@drawable/ic_mupdf"
-		>
-		<activity
-			android:name=".LibraryActivity"
-			android:exported="true"
-			>
-			<intent-filter>
-				<action android:name="android.intent.action.MAIN" />
-				<category android:name="android.intent.category.LAUNCHER" />
-			</intent-filter>
-		</activity>
-	</application>
+    package="com.artifex.mupdf.viewer.app"
+    android:installLocation="auto">
+
+    <application
+        android:theme="@style/AppTheme"
+        android:icon="@drawable/ic_mupdf"
+        android:label="MuPDF viewer">
+
+        <activity
+            android:name="com.khal.mupdf.viewer.app.ui.MainActivity"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <!-- list the mime-types we know about -->
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/vnd.ms-xpsdocument" />
+                <data android:mimeType="application/oxps" />
+                <data android:mimeType="application/vnd.comicbook+zip" />
+                <data android:mimeType="application/x-cbz" />
+                <data android:mimeType="application/epub+zip" />
+                <data android:mimeType="application/x-fictionbook" />
+                <data android:mimeType="application/x-mobipocket-ebook" />
+                <!-- list application/octet-stream to catch the ones android doesn't recognize -->
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+
+        </activity>
+
+    </application>
+
 </manifest>

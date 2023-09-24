@@ -1,67 +1,92 @@
-apply plugin: 'com.android.library'
-apply plugin: 'maven-publish'
+plugins {
+    id 'com.android.library'
+    id 'maven-publish'
+    id 'kotlin-android'
+    id 'kotlin-kapt'
+}
 
 group = 'com.artifex.mupdf'
 version = '1.23.3a'
 
-dependencies {
-	implementation 'androidx.appcompat:appcompat:1.1.+'
-	if (file('../jni/build.gradle').isFile())
-		api project(':jni')
-	else
-		api 'com.artifex.mupdf:fitz:1.23.3'
-}
-
 android {
-	compileSdkVersion 33
-	defaultConfig {
-		minSdkVersion 21
-		targetSdkVersion 33
-	}
-	publishing {
-		singleVariant("release") {
-			withSourcesJar()
-		}
-	}
+
+    compileSdkVersion 34
+
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 34
+    }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+        }
+    }
+
+    dataBinding.enabled = true
+    viewBinding.enabled = true
+
+    kotlinOptions {
+        jvmTarget = '16'
+    }
+
+    dependencies {
+
+        if (file('../jni/build.gradle').isFile()) {
+            api project(':jni')
+        } else {
+
+            api 'com.artifex.mupdf:fitz:1.23.3'
+        }
+
+        implementation 'androidx.appcompat:appcompat:1.6.1'
+        implementation "androidx.core:core-ktx:1.12.0"
+        implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+        implementation "androidx.activity:activity-ktx:1.7.2"
+        implementation 'com.google.android.material:material:1.9.0'
+    }
+
+
 }
 
 project.afterEvaluate {
-	publishing {
-		publications {
-			release(MavenPublication) {
-				artifactId 'viewer'
-				artifact(bundleReleaseAar)
+    publishing {
+        publications {
+            release(MavenPublication) {
+                artifactId 'viewer'
+                artifact(bundleReleaseAar)
 
-				pom {
-					name = 'viewer'
-					url = 'http://www.mupdf.com'
-					licenses {
-						license {
-							name = 'GNU Affero General Public License'
-							url = 'https://www.gnu.org/licenses/agpl-3.0.html'
-						}
-					}
-				}
-				pom.withXml {
-					final dependenciesNode = asNode().appendNode('dependencies')
-					configurations.implementation.allDependencies.each {
-						def dependencyNode = dependenciesNode.appendNode('dependency')
-						dependencyNode.appendNode('groupId', it.group)
-						dependencyNode.appendNode('artifactId', it.name)
-						dependencyNode.appendNode('version', it.version)
-					}
-				}
-			}
-		}
-		repositories {
-			maven {
-				name 'Local'
-				if (project.hasProperty('MAVEN_REPO')) {
-					url = MAVEN_REPO
-				} else {
-					url = "file://${System.properties['user.home']}/MAVEN"
-				}
-			}
-		}
-	}
+                pom {
+                    name = 'viewer'
+                    url = 'http://www.mupdf.com'
+                    licenses {
+                        license {
+                            name = 'GNU Affero General Public License'
+                            url = 'https://www.gnu.org/licenses/agpl-3.0.html'
+                        }
+                    }
+                }
+                pom.withXml {
+                    final dependenciesNode = asNode().appendNode('dependencies')
+                    configurations.implementation.allDependencies.each {
+                        def dependencyNode = dependenciesNode.appendNode('dependency')
+                        dependencyNode.appendNode('groupId', it.group)
+                        dependencyNode.appendNode('artifactId', it.name)
+                        dependencyNode.appendNode('version', it.version)
+                    }
+                }
+            }
+        }
+        repositories {
+            maven {
+                name 'Local'
+                if (project.hasProperty('MAVEN_REPO')) {
+                    url = MAVEN_REPO
+                } else {
+                    url = "file://${System.properties['user.home']}/MAVEN"
+                }
+            }
+        }
+    }
+
 }

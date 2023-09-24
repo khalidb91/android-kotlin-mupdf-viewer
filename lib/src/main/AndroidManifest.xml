@@ -1,35 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-	package="com.artifex.mupdf.viewer"
-	>
-	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-	<application>
-		<activity
-			android:name=".DocumentActivity"
-			android:configChanges="orientation|screenSize|keyboardHidden"
-			android:exported="true"
-			>
-			<intent-filter>
-				<action android:name="android.intent.action.VIEW" />
-				<category android:name="android.intent.category.BROWSABLE" />
-				<category android:name="android.intent.category.DEFAULT" />
-				<!-- list the mime-types we know about -->
-				<data android:mimeType="application/pdf" />
-				<data android:mimeType="application/vnd.ms-xpsdocument" />
-				<data android:mimeType="application/oxps" />
-				<data android:mimeType="application/vnd.comicbook+zip" />
-				<data android:mimeType="application/x-cbz" />
-				<data android:mimeType="application/epub+zip" />
-				<data android:mimeType="application/x-fictionbook" />
-				<data android:mimeType="application/x-mobipocket-ebook" />
-				<!-- list application/octet-stream to catch the ones android doesn't recognize -->
-				<data android:mimeType="application/octet-stream" />
-			</intent-filter>
-		</activity>
-		<activity
-			android:name=".OutlineActivity"
-			android:configChanges="orientation|screenSize|keyboardHidden"
-			>
-		</activity>
-	</application>
+    package="com.artifex.mupdf.viewer">
+
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
 </manifest>

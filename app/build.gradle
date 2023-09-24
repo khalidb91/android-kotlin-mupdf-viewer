@@ -1,53 +1,75 @@
-apply plugin: 'com.android.application'
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+    id 'kotlin-kapt'
+}
 
 group = 'com.artifex.mupdf'
 version = '1.23.3a'
 
-dependencies {
-	if (file('../lib/build.gradle').isFile())
-		api project(':lib')
-	else
-		api 'com.artifex.mupdf:viewer:1.23.3a'
-}
 
 android {
-	compileSdkVersion 33
-	defaultConfig {
-		minSdkVersion 21
-		targetSdkVersion 33
-		versionName '1.23.3a'
-		versionCode 141
-	}
 
-	splits {
-		abi {
-			enable true
-			universalApk true
-		}
-	}
+    compileSdkVersion 34
 
-	bundle {
-		abi {
-			enableSplit true
-		}
-	}
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 34
+        versionName '1.23.3a'
+        versionCode 141
+    }
 
-	if (project.hasProperty('release_storeFile')) {
-		signingConfigs {
-			release {
-				storeFile file(release_storeFile)
-				storePassword release_storePassword
-				keyAlias release_keyAlias
-				keyPassword release_keyPassword
-			}
-		}
-		buildTypes {
-			release {
-				signingConfig signingConfigs.release
-				ndk {
-					debugSymbolLevel 'FULL'
-				}
-			}
-		}
-	}
+    splits.abi {
+        enable true
+        universalApk true
+    }
+
+    bundle.abi.enableSplit true
+
+    dataBinding.enabled = true
+    viewBinding.enabled = true
+
+    kotlinOptions {
+        jvmTarget = '16'
+    }
+
+    dependencies {
+
+        if (file('../lib/build.gradle').isFile()) {
+            api project(':lib')
+        } else {
+            api 'com.artifex.mupdf:viewer:1.23.3a'
+        }
+
+        implementation "androidx.core:core-ktx:1.12.0"
+        implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+        implementation "androidx.activity:activity-ktx:1.7.2"
+        implementation 'com.google.android.material:material:1.9.0'
+        implementation 'androidx.navigation:navigation-fragment-ktx:2.7.2'
+        implementation 'androidx.navigation:navigation-ui-ktx:2.7.2'
+    }
+
+
+    if (project.hasProperty('release_storeFile')) {
+
+        signingConfigs {
+            release {
+                storeFile file(release_storeFile)
+                storePassword release_storePassword
+                keyAlias release_keyAlias
+                keyPassword release_keyPassword
+            }
+        }
+
+        buildTypes {
+            release {
+                signingConfig signingConfigs.release
+                ndk {
+                    debugSymbolLevel 'FULL'
+                }
+            }
+        }
+
+    }
+
 }
