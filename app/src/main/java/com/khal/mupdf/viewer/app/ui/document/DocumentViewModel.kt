@@ -7,17 +7,128 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.artifex.mupdf.fitz.SeekableInputStream
+import com.artifex.mupdf.viewer.app.R
 import com.artifex.mupdf.viewer.core.ContentInputStream
 import com.artifex.mupdf.viewer.core.MuPDFCore
+import com.artifex.mupdf.viewer.core.SearchEngine
+import com.artifex.mupdf.viewer.model.OutlineItem
+import com.artifex.mupdf.viewer.model.SearchDirection
 import com.artifex.mupdf.viewer.model.SearchResult
+import com.artifex.mupdf.viewer.view.PageAdapter
 import com.khal.mupdf.viewer.app.ui.home.HomeViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import java.io.IOException
+import kotlin.math.max
 
 class DocumentViewModel(application: Application) : AndroidViewModel(application) {
 
+    private var muPDFCore: MuPDFCore? = null
 
-    fun getMuPdf(uri: Uri): MuPDFCore? {
+    private var docTitle: String? = null
+
+    private var searchEngine: SearchEngine? = null
+
+    var isReflowable = false
+
+    private var linkHighlight = false
+
+    private var isOverlayVisible = false
+
+    private var pageSliderRes = 0
+
+    private var displayDPI = 0
+
+    private var layoutEM = 10
+    private var layoutW = 312
+    private var layoutH = 504
+
+
+    val uiState by lazy {
+        MutableStateFlow<UiState?>(null)
+    }
+
+    sealed class UiState {
+        object OnRequestPassword : UiState()
+        data class OnError(val error: Int) : UiState()
+        data class OnProgress(val isLoading: Boolean) : UiState()
+        data class OnPageChange(
+            val pageNumber: String,
+            val sliderMax: Int,
+            val sliderProgress: Int
+        ) : UiState()
+
+        data class OnLinkHighlight(val linkHighlight: Boolean) : UiState()
+        data class OnRelayoutDocument(val layoutEm: Int, val layoutW: Int, val layoutH: Int) :
+            UiState()
+
+        data class OverlayVisibility(val isVisible: Boolean) : UiState()
+        data class SearchMode(val isEnabled: Boolean) : UiState()
+        data class PageChange(val index: Int) : UiState()
+        data class OnTextFound(val result: SearchResult) : UiState()
+        data class OnShowOutline(val outlines: List<OutlineItem>) : UiState()
+    }
+
+    fun init(uri: Uri?) {
+
+        displayDPI = getApplication<Application>().resources.displayMetrics.densityDpi
+
+        muPDFCore = getMuPdf(uri!!)
+
+        if (muPDFCore?.needsPassword() == true) {
+            uiState.value = UiState.OnRequestPassword
+            return
+        }
+
+        if (muPDFCore?.countPages() == 0) {
+            muPDFCore = null
+        }
+
+        if (muPDFCore == null) {
+            val errorMsg = R.string.cannot_open_document
+            uiState.value = UiState.OnError(errorMsg)
+            return
+        }
+
+        // Set up the page slider
+        val smax = max((muPDFCore?.countPages() ?: 0) - 1, 1)
+        pageSliderRes = (10 + smax - 1) / smax * 2
+
+        isReflowable = (muPDFCore?.isReflowable == true)
+
+        searchEngine = object : SearchEngine(muPDFCore!!) {
+
+            override fun onTextFound(result: SearchResult) {
+                SearchResult.set(result)
+                viewModelScope.launch {
+                    uiState.emit(UiState.OnTextFound(result))
+                }
+            }
+
+            override fun onProgress(isLoading: Boolean) {
+                viewModelScope.launch {
+                    uiState.emit(UiState.OnProgress(isLoading))
+                }
+            }
+
+            override fun onError(messageId: Int) {
+                viewModelScope.launch {
+                    uiState.emit(UiState.OnError(messageId))
+                }
+            }
+
+        }
+
+    }
+
+    fun onOutlineClick() {
+       val outlines = muPDFCore?.outline.orEmpty()
+        uiState.value = UiState.OnShowOutline(outlines)
+    }
+
+    private fun getMuPdf(uri: Uri): MuPDFCore? {
 
         var docTitle: String? = null
         var size: Long = -1
@@ -164,6 +275,102 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
             Log.e(HomeViewModel.TAG, "Error opening document stream: $e")
             return null
         }
+    }
+
+    fun getDocTitle(): String? {
+        return muPDFCore?.title ?: this.docTitle
+    }
+
+    fun authenticate(pwd: String): Boolean {
+        return muPDFCore?.authenticatePassword(pwd) == true
+    }
+
+    fun toggleLinkHighlight() {
+        linkHighlight = linkHighlight.not()
+        uiState.value = UiState.OnLinkHighlight(linkHighlight)
+    }
+
+    override fun onCleared() {
+        searchEngine?.stop()
+        muPDFCore?.onDestroy()
+        muPDFCore = null
+        super.onCleared()
+    }
+
+    fun updateLayout(newLayoutEM: Int) {
+        if (layoutEM != newLayoutEM) {
+            layoutEM = newLayoutEM
+            uiState.value = UiState.OnRelayoutDocument(
+                layoutEm = layoutEM,
+                layoutW = layoutW,
+                layoutH = layoutH
+            )
+        }
+    }
+
+    fun toggleOverlay() {
+        isOverlayVisible = isOverlayVisible.not()
+        uiState.value = UiState.OverlayVisibility(isOverlayVisible)
+    }
+
+    fun moveToPage(index: Int) {
+        muPDFCore ?: return
+        val pageNumber = "${index + 1} / ${muPDFCore?.countPages() ?: 0}"
+        val max = ((muPDFCore?.countPages() ?: 0) - 1) * pageSliderRes
+        val progress = (index * pageSliderRes)
+        uiState.value = UiState.OnPageChange(pageNumber, max, progress)
+    }
+
+    fun onProgressChange(progress: Int) {
+        val index = (progress + pageSliderRes / 2) / pageSliderRes
+        moveToPage(index)
+    }
+
+    fun search(
+        query: String,
+        searchDirection: SearchDirection,
+        displayPage: Int
+    ) {
+        searchEngine?.search(
+            query = query,
+            direction = searchDirection,
+            displayPage = displayPage,
+            searchPage = SearchResult.get()?.pageNumber ?: -1
+        )
+    }
+
+    fun getViewIndex(currentPage: Int, layoutW: Int, layoutH: Int, layoutEm: Int): Int {
+        return muPDFCore?.layout(currentPage, layoutW, layoutH, layoutEm) ?: 0
+    }
+
+    fun updateSize(w: Int, h: Int) {
+        layoutW = w * 72 / displayDPI
+        layoutH = h * 72 / displayDPI
+        uiState.value = UiState.OnRelayoutDocument(
+            layoutEm = layoutEM,
+            layoutW = layoutW,
+            layoutH = layoutH
+        )
+    }
+
+    fun setSearchMode(enabled: Boolean) {
+        uiState.value = UiState.SearchMode(enabled)
+        if(enabled.not()){
+            SearchResult.set(null)
+        }
+    }
+
+    fun getPagesAdapter(): PageAdapter? {
+        return if (muPDFCore != null) {
+            PageAdapter(getApplication<Application>().applicationContext, muPDFCore!!)
+        } else {
+            null
+        }
+    }
+
+    fun changePage(progress: Int) {
+        val index = (progress + pageSliderRes / 2) / pageSliderRes
+        uiState.value = UiState.PageChange(index)
     }
 
 }

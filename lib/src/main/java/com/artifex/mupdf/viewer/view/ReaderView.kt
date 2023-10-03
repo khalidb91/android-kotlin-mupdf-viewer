@@ -1,4 +1,4 @@
-package com.khal.mupdf.viewer.app.ui.view
+package com.artifex.mupdf.viewer.view
 
 import android.content.Context
 import android.graphics.Point
@@ -17,7 +17,6 @@ import android.widget.Scroller
 import com.artifex.mupdf.fitz.Link
 import com.artifex.mupdf.viewer.R
 import com.artifex.mupdf.viewer.model.SearchResult
-import com.khal.mupdf.viewer.app.ui.document.PageAdapter
 import java.util.LinkedList
 import java.util.Stack
 import kotlin.math.abs

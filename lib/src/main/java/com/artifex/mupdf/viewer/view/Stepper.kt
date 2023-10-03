@@ -1,4 +1,4 @@
-package com.khal.mupdf.viewer.app.ui.view
+package com.artifex.mupdf.viewer.view
 
 import android.view.View
 

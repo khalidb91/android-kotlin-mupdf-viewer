@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/menu_link"
+        android:icon="@drawable/round_link_24"
+        android:title="link"
+        android:iconTint="@color/color_primary"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/menu_layout"
+        android:icon="@drawable/round_format_size_24"
+        android:title="layout"
+        app:showAsAction="always">
+
+        <menu>
+            <item
+                android:id="@+id/action_layout_6pt"
+                android:title="6pt"
+                app:showAsAction="ifRoom|withText" />
+            <item
+                android:id="@+id/action_layout_7pt"
+                android:title="7pt"
+                app:showAsAction="ifRoom|withText" />
+            <item
+                android:id="@+id/action_layout_8pt"
+                android:title="8pt"
+                app:showAsAction="ifRoom|withText" />
+            <item
+                android:id="@+id/action_layout_9pt"
+                android:title="9pt"
+                app:showAsAction="ifRoom|withText" />
+            <item
+                android:id="@+id/action_layout_10pt"
+                android:title="10pt"
+                app:showAsAction="ifRoom|withText" />
+            <item
+                android:id="@+id/action_layout_11pt"
+                android:title="11pt"
+                app:showAsAction="ifRoom|withText" />
+            <item
+                android:id="@+id/action_layout_12pt"
+                android:title="12pt"
+                app:showAsAction="ifRoom|withText" />
+            <item
+                android:id="@+id/action_layout_13pt"
+                android:title="13pt"
+                app:showAsAction="ifRoom|withText" />
+            <item
+                android:id="@+id/action_layout_14pt"
+                android:title="14pt"
+                app:showAsAction="ifRoom|withText" />
+            <item
+                android:id="@+id/action_layout_15pt"
+                android:title="15pt"
+                app:showAsAction="ifRoom|withText" />
+            <item
+                android:id="@+id/action_layout_16pt"
+                android:title="16pt"
+                app:showAsAction="ifRoom|withText" />
+        </menu>
+
+    </item>
+
+    <item
+        android:id="@+id/menu_outline"
+        android:icon="@drawable/round_list_24"
+        android:title="outline"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/menu_search"
+        android:icon="@drawable/round_search_24"
+        android:title="search"
+        app:showAsAction="collapseActionView|always" />
+
+</menu>

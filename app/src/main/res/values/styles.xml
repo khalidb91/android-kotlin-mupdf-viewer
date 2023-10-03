@@ -22,6 +22,19 @@
         <item name="fontFamily">@font/roboto_mono</item>
         <item name="android:fontFamily">@font/roboto_mono</item>
 
+        <item name="searchViewStyle">@style/SearchViewStyle</item>
+
+    </style>
+
+    <style name="SearchViewStyle" parent="Widget.AppCompat.SearchView">
+        <item name="queryBackground">@android:color/transparent</item>
+        <item name="queryHint">@string/search</item>
+        <item name="searchIcon">@drawable/round_search_24</item>
+        <item name="textAllCaps">true</item>
+        <item name="searchHintIcon">@null</item>
+        <item name="closeIcon">@drawable/round_close_24</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:fontFamily">@font/roboto_mono</item>
     </style>
 
 </resources>

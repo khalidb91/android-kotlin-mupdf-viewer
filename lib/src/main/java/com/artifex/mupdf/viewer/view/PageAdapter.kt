@@ -1,4 +1,4 @@
-package com.khal.mupdf.viewer.app.ui.document
+package com.artifex.mupdf.viewer.view
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -10,7 +10,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.BaseAdapter
 import com.artifex.mupdf.viewer.core.MuPDFCore
-import com.khal.mupdf.viewer.app.ui.view.PageView
 
 class PageAdapter(
     private val context: Context,
@@ -18,7 +17,7 @@ class PageAdapter(
 ) : BaseAdapter() {
 
     private val pageSizes = SparseArray<PointF?>()
-    private var sharedHqBm: Bitmap? = null
+    private var bitmap: Bitmap? = null
 
     override fun getCount(): Int {
         return try {
@@ -38,8 +37,8 @@ class PageAdapter(
 
     fun releaseBitmaps() {
         //  recycle and release the shared bitmap.
-        sharedHqBm?.recycle()
-        sharedHqBm = null
+        bitmap?.recycle()
+        bitmap = null
     }
 
     fun refresh() {
@@ -51,14 +50,14 @@ class PageAdapter(
         val pageView: PageView
 
         if (convertView == null) {
-            if (sharedHqBm == null || sharedHqBm!!.width != parent.width || sharedHqBm!!.height != parent.height) {
-                sharedHqBm = if (parent.width > 0 && parent.height > 0) Bitmap.createBitmap(
+            if (bitmap == null || bitmap!!.width != parent.width || bitmap!!.height != parent.height) {
+                bitmap = if (parent.width > 0 && parent.height > 0) Bitmap.createBitmap(
                     parent.width,
                     parent.height,
                     Bitmap.Config.ARGB_8888
                 ) else null
             }
-            pageView = PageView(context, muPDFCore, Point(parent.width, parent.height), sharedHqBm)
+            pageView = PageView(context, muPDFCore, Point(parent.width, parent.height), bitmap)
         } else {
             pageView = convertView as PageView
         }
@@ -90,7 +89,9 @@ class PageAdapter(
                         pageSizes.put(position, result)
                         // Check that this view hasn't been reused for
                         // another page since we started
-                        if (pageView.page == position) pageView.setPage(position, result)
+                        if (pageView.page == position) {
+                            pageView.setPage(position, result)
+                        }
                     }
                 }
 
