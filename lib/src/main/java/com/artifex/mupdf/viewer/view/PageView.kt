@@ -1,684 +1,720 @@
-package com.artifex.mupdf.viewer.view;
+package com.artifex.mupdf.viewer.view
 
-import android.content.Context;
-import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.Bitmap.Config;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Matrix;
-import android.graphics.Paint;
-import android.graphics.Path;
-import android.graphics.Point;
-import android.graphics.PointF;
-import android.graphics.Rect;
-import android.graphics.drawable.Drawable;
-import android.net.Uri;
-import android.os.AsyncTask;
-import android.os.Build;
-import android.os.FileUriExposedException;
-import android.os.Handler;
-import android.util.Log;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.ImageView;
-import android.widget.ProgressBar;
-import android.widget.Toast;
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Point
+import android.graphics.PointF
+import android.graphics.Rect
+import android.net.Uri
+import android.os.AsyncTask
+import android.os.FileUriExposedException
+import android.os.Handler
+import android.util.Log
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.ProgressBar
+import android.widget.Toast
+import androidx.core.content.res.ResourcesCompat
+import com.artifex.mupdf.fitz.Cookie
+import com.artifex.mupdf.fitz.Link
+import com.artifex.mupdf.fitz.Quad
+import com.artifex.mupdf.viewer.R
+import com.artifex.mupdf.viewer.core.CancellableAsyncTask
+import com.artifex.mupdf.viewer.core.CancellableTaskDefinition
+import com.artifex.mupdf.viewer.core.MuPDFCancellableTaskDefinition
+import com.artifex.mupdf.viewer.core.MuPDFCore
 
-import com.artifex.mupdf.fitz.Cookie;
-import com.artifex.mupdf.fitz.Link;
-import com.artifex.mupdf.fitz.Quad;
-import com.artifex.mupdf.viewer.R;
-import com.artifex.mupdf.viewer.core.CancellableAsyncTask;
-import com.artifex.mupdf.viewer.core.CancellableTaskDefinition;
-import com.artifex.mupdf.viewer.core.MuPDFCancellableTaskDefinition;
-import com.artifex.mupdf.viewer.core.MuPDFCore;
+open class PageView(
+    private val context: Context,
+    private val muPDFCore: MuPDFCore,
+    private val parentSize: Point,
+    sharedHqBm: Bitmap?
+) : ViewGroup(context) {
 
-public class PageView extends ViewGroup {
-    private final String APP = "MuPDF";
-    private final MuPDFCore mCore;
 
-    private static final int HIGHLIGHT_COLOR = 0x80cc6600;
-    private static final int LINK_COLOR = 0x800066cc;
-    private static final int BOX_COLOR = 0xFF4444FF;
-    private static final int BACKGROUND_COLOR = 0xFFFFFFFF;
-    private static final int PROGRESS_DIALOG_DELAY = 200;
+    var page = 0
+        protected set
 
-    protected final Context mContext;
+    protected var size: Point? = null // Size of page at minimum zoom
+    protected var sourceScale = 0f
+    private var entire: ImageView? = null // Image rendered at minimum zoom
+    private var entireBm: Bitmap?
+    private val entireMat: Matrix
+    private var getLinkInfo: AsyncTask<Void?, Void?, Array<Link>?>? = null
+    private var drawEntire: CancellableAsyncTask<Void?, Boolean?>? = null
+    private var patchViewSize: Point? = null // Patch creation basis view size
+    private var patchArea: Rect? = null
+    private var patch: ImageView? = null
+    private var patchBm: Bitmap?
+    private var drawPatch: CancellableAsyncTask<Void?, Boolean?>? = null
+    private var searchBoxes: Array<Array<Quad>>? = null
+    protected var links: Array<Link>? = null
+    private var searchView: View? = null
+    private var isBlank = false
+    private var highlightLinks = false
+    private var errorIndicator: ImageView? = null
+    private var busyIndicator: ProgressBar? = null
+    private val handler = Handler()
 
-    protected int mPageNumber;
-    private final Point mParentSize;
-    protected Point mSize;   // Size of page at minimum zoom
-    protected float mSourceScale;
+    protected val linkInfo: Array<Link>?
+        get() = try {
+            muPDFCore.getPageLinks(page)
+        } catch (e: RuntimeException) {
+            null
+        }
 
-    private ImageView mEntire; // Image rendered at minimum zoom
-    private Bitmap mEntireBm;
-    private final Matrix mEntireMat;
-    private AsyncTask<Void, Void, Link[]> mGetLinkInfo;
-    private CancellableAsyncTask<Void, Boolean> mDrawEntire;
-
-    private Point mPatchViewSize; // View size on the basis of which the patch was created
-    private Rect mPatchArea;
-    private ImageView mPatch;
-    private Bitmap mPatchBm;
-    private CancellableAsyncTask<Void, Boolean> mDrawPatch;
-    private Quad[][] mSearchBoxes;
-    protected Link[] mLinks;
-    private View mSearchView;
-    private boolean mIsBlank;
-    private boolean mHighlightLinks;
-
-    private ImageView mErrorIndicator;
-
-    private ProgressBar mBusyIndicator;
-    private final Handler mHandler = new Handler();
-
-    public PageView(Context c, MuPDFCore core, Point parentSize, Bitmap sharedHqBm) {
-        super(c);
-        mContext = c;
-        mCore = core;
-        mParentSize = parentSize;
-        setBackgroundColor(BACKGROUND_COLOR);
-        mEntireBm = Bitmap.createBitmap(parentSize.x, parentSize.y, Config.ARGB_8888);
-        mPatchBm = sharedHqBm;
-        mEntireMat = new Matrix();
+    init {
+        this.setBackgroundColor(BACKGROUND_COLOR)
+        entireBm = Bitmap.createBitmap(
+            /* width = */ parentSize.x,
+            /* height = */ parentSize.y,
+            /* config = */ Bitmap.Config.ARGB_8888
+        )
+        patchBm = sharedHqBm
+        entireMat = Matrix()
     }
 
-    private void reinit() {
+    private fun reinit() {
+
         // Cancel pending render task
-        if (mDrawEntire != null) {
-            mDrawEntire.cancel();
-            mDrawEntire = null;
-        }
 
-        if (mDrawPatch != null) {
-            mDrawPatch.cancel();
-            mDrawPatch = null;
-        }
+        drawEntire?.cancel()
+        drawEntire = null
 
-        if (mGetLinkInfo != null) {
-            mGetLinkInfo.cancel(true);
-            mGetLinkInfo = null;
-        }
+        drawPatch?.cancel()
+        drawPatch = null
 
-        mIsBlank = true;
-        mPageNumber = 0;
+        getLinkInfo?.cancel(true)
+        getLinkInfo = null
 
-        if (mSize == null)
-            mSize = mParentSize;
+        isBlank = true
+        page = 0
 
-        if (mEntire != null) {
-            mEntire.setImageBitmap(null);
-            mEntire.invalidate();
-        }
+        size = size ?: parentSize
 
-        if (mPatch != null) {
-            mPatch.setImageBitmap(null);
-            mPatch.invalidate();
-        }
+        entire?.setImageBitmap(null)
+        entire?.invalidate()
 
-        mPatchViewSize = null;
-        mPatchArea = null;
+        patch?.setImageBitmap(null)
+        patch?.invalidate()
 
-        mSearchBoxes = null;
-        mLinks = null;
+        patchViewSize = null
+        patchArea = null
+        searchBoxes = null
+        links = null
 
-        clearRenderError();
+        clearRenderError()
     }
 
-    public void releaseResources() {
-        reinit();
+    fun releaseResources() {
 
-        if (mBusyIndicator != null) {
-            removeView(mBusyIndicator);
-            mBusyIndicator = null;
+        reinit()
+
+        if (busyIndicator != null) {
+            removeView(busyIndicator)
+            busyIndicator = null
         }
-        clearRenderError();
+
+        clearRenderError()
+
     }
 
-    public void releaseBitmaps() {
-        reinit();
+    fun releaseBitmaps() {
+
+        reinit()
 
         // recycle bitmaps before releasing them.
+        entireBm?.recycle()
+        entireBm = null
 
-        if (mEntireBm != null)
-            mEntireBm.recycle();
-        mEntireBm = null;
+        patchBm?.recycle()
+        patchBm = null
 
-        if (mPatchBm != null)
-            mPatchBm.recycle();
-        mPatchBm = null;
     }
 
-    public void blank(int page) {
-        reinit();
-        mPageNumber = page;
+    fun blank(page: Int) {
 
-        if (mBusyIndicator == null) {
-            mBusyIndicator = new ProgressBar(mContext);
-            mBusyIndicator.setIndeterminate(true);
-            addView(mBusyIndicator);
+        reinit()
+
+        this.page = page
+
+        if (busyIndicator == null) {
+            busyIndicator = ProgressBar(context).apply { isIndeterminate = true }
+            addView(busyIndicator)
         }
 
-        setBackgroundColor(BACKGROUND_COLOR);
+        setBackgroundColor(BACKGROUND_COLOR)
+
     }
 
-    protected void clearRenderError() {
-        if (mErrorIndicator == null)
-            return;
-
-        removeView(mErrorIndicator);
-        mErrorIndicator = null;
-        invalidate();
+    protected fun clearRenderError() {
+        if (errorIndicator == null) return
+        removeView(errorIndicator)
+        errorIndicator = null
+        invalidate()
     }
 
-    protected void setRenderError(String why) {
+    protected fun setRenderError(why: String?) {
+        val page = page
 
-        int page = mPageNumber;
-        reinit();
-        mPageNumber = page;
+        reinit()
 
-        if (mBusyIndicator != null) {
-            removeView(mBusyIndicator);
-            mBusyIndicator = null;
-        }
-        if (mSearchView != null) {
-            removeView(mSearchView);
-            mSearchView = null;
+        this.page = page
+
+        if (busyIndicator != null) {
+            removeView(busyIndicator)
+            busyIndicator = null
         }
 
-        if (mErrorIndicator == null) {
-            mErrorIndicator = new OpaqueImageView(mContext);
-            mErrorIndicator.setScaleType(ImageView.ScaleType.CENTER);
-            addView(mErrorIndicator);
-            Drawable mErrorIcon = getResources().getDrawable(R.drawable.ic_error_red_24dp);
-            mErrorIndicator.setImageDrawable(mErrorIcon);
-            mErrorIndicator.setBackgroundColor(BACKGROUND_COLOR);
+        if (searchView != null) {
+            removeView(searchView)
+            searchView = null
         }
 
-        setBackgroundColor(Color.TRANSPARENT);
-        mErrorIndicator.bringToFront();
-        mErrorIndicator.invalidate();
+        if (errorIndicator == null) {
+            errorIndicator = OpaqueImageView(context)
+            (errorIndicator as OpaqueImageView).scaleType = ImageView.ScaleType.CENTER
+            addView(errorIndicator)
+            val errorIcon =
+                ResourcesCompat.getDrawable(resources, R.drawable.ic_error_red_24dp, null)
+            (errorIndicator as OpaqueImageView).setImageDrawable(errorIcon)
+            (errorIndicator as OpaqueImageView).setBackgroundColor(BACKGROUND_COLOR)
+        }
+
+        setBackgroundColor(Color.TRANSPARENT)
+        errorIndicator?.bringToFront()
+        errorIndicator?.invalidate()
+
     }
 
-    public void setPage(int page, PointF size) {
+    fun setPage(page: Int, size: PointF?) {
         // Cancel pending render task
-        if (mDrawEntire != null) {
-            mDrawEntire.cancel();
-            mDrawEntire = null;
-        }
+        var size: PointF? = size
 
-        mIsBlank = false;
+        drawEntire?.cancel()
+        drawEntire = null
+
+        isBlank = false
+
         // Highlights may be missing because mIsBlank was true on last draw
-        if (mSearchView != null)
-            mSearchView.invalidate();
+        searchView?.invalidate()
 
-        mPageNumber = page;
+        this.page = page
 
         if (size == null) {
-            setRenderError("Error loading page");
-            size = new PointF(612, 792);
+            setRenderError("Error loading page")
+            size = PointF(612f, 792f)
         }
 
         // Calculate scaled size that fits within the screen limits
         // This is the size at minimum zoom
-        mSourceScale = Math.min(mParentSize.x / size.x, mParentSize.y / size.y);
-        Point newSize = new Point((int) (size.x * mSourceScale), (int) (size.y * mSourceScale));
-        mSize = newSize;
+        sourceScale = Math.min(parentSize.x / size.x, parentSize.y / size.y)
+        val newSize = Point((size.x * sourceScale).toInt(), (size.y * sourceScale).toInt())
+        this.size = newSize
 
-        if (mErrorIndicator != null)
-            return;
-
-        if (mEntire == null) {
-            mEntire = new OpaqueImageView(mContext);
-            mEntire.setScaleType(ImageView.ScaleType.MATRIX);
-            addView(mEntire);
+        if (errorIndicator != null) {
+            return
         }
 
-        mEntire.setImageBitmap(null);
-        mEntire.invalidate();
+        if (entire == null) {
+            entire = OpaqueImageView(context)
+            (entire as OpaqueImageView).scaleType = ImageView.ScaleType.MATRIX
+            addView(entire)
+        }
+
+        entire?.setImageBitmap(null)
+        entire?.invalidate()
 
         // Get the link info in the background
-        mGetLinkInfo = new AsyncTask<Void, Void, Link[]>() {
-            protected Link[] doInBackground(Void... v) {
-                return getLinkInfo();
+        getLinkInfo = object : AsyncTask<Void?, Void?, Array<Link>?>() {
+
+            override fun onPostExecute(result: Array<Link>?) {
+                links = result
+                searchView?.invalidate()
             }
 
-            protected void onPostExecute(Link[] v) {
-                mLinks = v;
-                if (mSearchView != null)
-                    mSearchView.invalidate();
-            }
-        };
 
-        mGetLinkInfo.execute();
+            override fun doInBackground(vararg params: Void?): Array<Link>? {
+                return linkInfo
+            }
+
+        }
+
+        (getLinkInfo as AsyncTask<Void?, Void?, Array<Link>?>).execute()
 
         // Render the page in the background
-        mDrawEntire = new CancellableAsyncTask<Void, Boolean>(getDrawPageTask(mEntireBm, mSize.x, mSize.y, 0, 0, mSize.x, mSize.y)) {
+        drawEntire = object : CancellableAsyncTask<Void?, Boolean?>(
+            getDrawPageTask(
+                entireBm,
+                this@PageView.size!!.x,
+                this@PageView.size!!.y,
+                0,
+                0,
+                this@PageView.size!!.x,
+                this@PageView.size!!.y
+            )
+        ) {
 
-            @Override
-            public void onPreExecute() {
-                setBackgroundColor(BACKGROUND_COLOR);
-                mEntire.setImageBitmap(null);
-                mEntire.invalidate();
+            override fun onPreExecute() {
 
-                if (mBusyIndicator == null) {
-                    mBusyIndicator = new ProgressBar(mContext);
-                    mBusyIndicator.setIndeterminate(true);
-                    addView(mBusyIndicator);
-                    mBusyIndicator.setVisibility(INVISIBLE);
-                    mHandler.postDelayed(new Runnable() {
-                        public void run() {
-                            if (mBusyIndicator != null)
-                                mBusyIndicator.setVisibility(VISIBLE);
-                        }
-                    }, PROGRESS_DIALOG_DELAY);
+                setBackgroundColor(BACKGROUND_COLOR)
+
+                entire?.setImageBitmap(null)
+                entire?.invalidate()
+
+                if (busyIndicator == null) {
+
+                    busyIndicator = ProgressBar(context).apply {
+                        isIndeterminate = true
+                    }
+
+                    addView(busyIndicator)
+
+                    busyIndicator?.visibility = INVISIBLE
+
+                    handler.postDelayed(
+                        /* r = */ { busyIndicator?.visibility = VISIBLE },
+                        /* delayMillis = */ PROGRESS_DIALOG_DELAY.toLong()
+                    )
+
                 }
+
             }
 
-            @Override
-            public void onPostExecute(Boolean result) {
-                removeView(mBusyIndicator);
-                mBusyIndicator = null;
-                if (result.booleanValue()) {
-                    clearRenderError();
-                    mEntire.setImageBitmap(mEntireBm);
-                    mEntire.invalidate();
+            override fun onPostExecute(result: Boolean?) {
+
+                removeView(busyIndicator)
+
+                busyIndicator = null
+
+                if (result == true) {
+                    clearRenderError()
+                    entire?.setImageBitmap(entireBm)
+                    entire?.invalidate()
                 } else {
-                    setRenderError("Error rendering page");
+                    setRenderError("Error rendering page")
                 }
-                setBackgroundColor(Color.TRANSPARENT);
+
+                setBackgroundColor(Color.TRANSPARENT)
+
             }
-        };
 
-        mDrawEntire.execute();
+        }
 
-        if (mSearchView == null) {
-            mSearchView = new View(mContext) {
-                @Override
-                protected void onDraw(final Canvas canvas) {
-                    super.onDraw(canvas);
+        (drawEntire as CancellableAsyncTask<Void?, Boolean?>).execute()
+
+        if (searchView == null) {
+
+            searchView = object : View(context) {
+
+                override fun onDraw(canvas: Canvas) {
+                    super.onDraw(canvas)
+
                     // Work out current total scale factor
                     // from source to view
-                    final float scale = mSourceScale * (float) getWidth() / (float) mSize.x;
-                    final Paint paint = new Paint();
+                    val scale = sourceScale * width.toFloat() / this@PageView.size!!.x.toFloat()
+                    val paint = Paint()
 
-                    if (!mIsBlank && mSearchBoxes != null) {
-                        paint.setColor(HIGHLIGHT_COLOR);
-                        for (Quad[] searchBox : mSearchBoxes) {
-                            for (Quad q : searchBox) {
-                                Path path = new Path();
-                                path.moveTo(q.ul_x * scale, q.ul_y * scale);
-                                path.lineTo(q.ll_x * scale, q.ll_y * scale);
-                                path.lineTo(q.lr_x * scale, q.lr_y * scale);
-                                path.lineTo(q.ur_x * scale, q.ur_y * scale);
-                                path.close();
-                                canvas.drawPath(path, paint);
+                    if (!isBlank && searchBoxes != null) {
+
+                        paint.color = HIGHLIGHT_COLOR
+
+                        for (searchBox in searchBoxes!!) {
+                            for (q in searchBox) {
+                                val path = Path()
+                                path.moveTo(q.ul_x * scale, q.ul_y * scale)
+                                path.lineTo(q.ll_x * scale, q.ll_y * scale)
+                                path.lineTo(q.lr_x * scale, q.lr_y * scale)
+                                path.lineTo(q.ur_x * scale, q.ur_y * scale)
+                                path.close()
+                                canvas.drawPath(path, paint)
                             }
                         }
+
                     }
 
-                    if (!mIsBlank && mLinks != null && mHighlightLinks) {
-                        paint.setColor(LINK_COLOR);
-                        for (Link link : mLinks)
-                            canvas.drawRect(link.getBounds().x0 * scale, link.getBounds().y0 * scale,
-                                    link.getBounds().x1 * scale, link.getBounds().y1 * scale,
-                                    paint);
+                    if (!isBlank && links != null && highlightLinks) {
+                        paint.color = LINK_COLOR
+                        for (link in links!!) canvas.drawRect(
+                            link.bounds.x0 * scale, link.bounds.y0 * scale,
+                            link.bounds.x1 * scale, link.bounds.y1 * scale,
+                            paint
+                        )
                     }
+
                 }
-            };
 
-            addView(mSearchView);
-        }
-        requestLayout();
-    }
-
-    public void setSearchBoxes(Quad[][] searchBoxes) {
-        mSearchBoxes = searchBoxes;
-        if (mSearchView != null)
-            mSearchView.invalidate();
-    }
-
-    public void setLinkHighlighting(boolean f) {
-        mHighlightLinks = f;
-        if (mSearchView != null)
-            mSearchView.invalidate();
-    }
-
-    @Override
-    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int x, y;
-        if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) {
-            x = mSize.x;
-        } else {
-            x = MeasureSpec.getSize(widthMeasureSpec);
-        }
-        if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) {
-            y = mSize.y;
-        } else {
-            y = MeasureSpec.getSize(heightMeasureSpec);
-        }
-
-        setMeasuredDimension(x, y);
-
-        if (mBusyIndicator != null) {
-            int limit = Math.min(mParentSize.x, mParentSize.y) / 2;
-            mBusyIndicator.measure(View.MeasureSpec.AT_MOST | limit, View.MeasureSpec.AT_MOST | limit);
-        }
-        if (mErrorIndicator != null) {
-            int limit = Math.min(mParentSize.x, mParentSize.y) / 2;
-            mErrorIndicator.measure(View.MeasureSpec.AT_MOST | limit, View.MeasureSpec.AT_MOST | limit);
-        }
-    }
-
-    @Override
-    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-        int w = right - left;
-        int h = bottom - top;
-
-        if (mEntire != null) {
-            if (mEntire.getWidth() != w || mEntire.getHeight() != h) {
-                mEntireMat.setScale(w / (float) mSize.x, h / (float) mSize.y);
-                mEntire.setImageMatrix(mEntireMat);
-                mEntire.invalidate();
             }
-            mEntire.layout(0, 0, w, h);
+
+            addView(searchView)
+
         }
 
-        if (mSearchView != null) {
-            mSearchView.layout(0, 0, w, h);
+        requestLayout()
+    }
+
+    fun setSearchBoxes(searchBoxes: Array<Array<Quad>>?) {
+        this.searchBoxes = searchBoxes
+        searchView?.invalidate()
+    }
+
+    fun setLinkHighlighting(highlight: Boolean) {
+        highlightLinks = highlight
+        searchView?.invalidate()
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+
+        val x: Int = when (MeasureSpec.getMode(widthMeasureSpec)) {
+            MeasureSpec.UNSPECIFIED -> size!!.x
+            else -> MeasureSpec.getSize(widthMeasureSpec)
         }
 
-        if (mPatchViewSize != null) {
-            if (mPatchViewSize.x != w || mPatchViewSize.y != h) {
+        val y: Int = when (MeasureSpec.getMode(heightMeasureSpec)) {
+            MeasureSpec.UNSPECIFIED -> size!!.y
+            else -> MeasureSpec.getSize(heightMeasureSpec)
+        }
+
+        setMeasuredDimension(x, y)
+
+        busyIndicator?.let {
+            val limit = Math.min(parentSize.x, parentSize.y) / 2
+            it.measure(
+                /* widthMeasureSpec = */ MeasureSpec.AT_MOST or limit,
+                /* heightMeasureSpec = */MeasureSpec.AT_MOST or limit
+            )
+        }
+
+        errorIndicator?.let {
+            val limit = Math.min(parentSize.x, parentSize.y) / 2
+            it.measure(
+                /* widthMeasureSpec = */ MeasureSpec.AT_MOST or limit,
+                /* heightMeasureSpec = */ MeasureSpec.AT_MOST or limit
+            )
+        }
+
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+
+        val w = right - left
+        val h = bottom - top
+
+        entire?.let {
+            if (it.width != w || it.height != h) {
+                entireMat.setScale(
+                    /* sx = */ w / size!!.x.toFloat(),
+                    /* sy = */ h / size!!.y.toFloat()
+                )
+                it.imageMatrix = entireMat
+                it.invalidate()
+            }
+            it.layout(0, 0, w, h)
+        }
+
+        searchView?.layout(0, 0, w, h)
+
+        patchViewSize?.let {
+            if (it.x != w || it.y != h) {
                 // Zoomed since patch was created
-                mPatchViewSize = null;
-                mPatchArea = null;
-                if (mPatch != null) {
-                    mPatch.setImageBitmap(null);
-                    mPatch.invalidate();
-                }
+                patchViewSize = null
+                patchArea = null
+                patch?.setImageBitmap(null)
+                patch?.invalidate()
             } else {
-                mPatch.layout(mPatchArea.left, mPatchArea.top, mPatchArea.right, mPatchArea.bottom);
+                patch?.layout(
+                    patchArea!!.left,
+                    patchArea!!.top,
+                    patchArea!!.right,
+                    patchArea!!.bottom
+                )
             }
         }
 
-        if (mBusyIndicator != null) {
-            int bw = mBusyIndicator.getMeasuredWidth();
-            int bh = mBusyIndicator.getMeasuredHeight();
-
-            mBusyIndicator.layout((w - bw) / 2, (h - bh) / 2, (w + bw) / 2, (h + bh) / 2);
+        busyIndicator?.let {
+            val bw = it.measuredWidth
+            val bh = it.measuredHeight
+            it.layout((w - bw) / 2, (h - bh) / 2, (w + bw) / 2, (h + bh) / 2)
         }
 
-        if (mErrorIndicator != null) {
-            int bw = (int) (8.5 * mErrorIndicator.getMeasuredWidth());
-            int bh = 11 * mErrorIndicator.getMeasuredHeight();
-            mErrorIndicator.layout((w - bw) / 2, (h - bh) / 2, (w + bw) / 2, (h + bh) / 2);
+        errorIndicator?.let {
+            val bw = (8.5 * it.measuredWidth).toInt()
+            val bh = 11 * it.measuredHeight
+            it.layout((w - bw) / 2, (h - bh) / 2, (w + bw) / 2, (h + bh) / 2)
         }
+
     }
 
-    public void updateHq(boolean update) {
-        if (mErrorIndicator != null) {
-            if (mPatch != null) {
-                mPatch.setImageBitmap(null);
-                mPatch.invalidate();
-            }
-            return;
+    fun updateHq(update: Boolean) {
+
+        errorIndicator?.let {
+            patch?.setImageBitmap(null)
+            patch?.invalidate()
+            return
         }
 
-        Rect viewArea = new Rect(getLeft(), getTop(), getRight(), getBottom());
-        if (viewArea.width() == mSize.x || viewArea.height() == mSize.y) {
+        val viewArea = Rect(left, top, right, bottom)
+        if (viewArea.width() == size!!.x || viewArea.height() == size!!.y) {
             // If the viewArea's size matches the unzoomed size, there is no need for an hq patch
-            if (mPatch != null) {
-                mPatch.setImageBitmap(null);
-                mPatch.invalidate();
-            }
+            patch?.setImageBitmap(null)
+            patch?.invalidate()
         } else {
-            final Point patchViewSize = new Point(viewArea.width(), viewArea.height());
-            final Rect patchArea = new Rect(0, 0, mParentSize.x, mParentSize.y);
+            val patchViewSize = Point(viewArea.width(), viewArea.height())
+            val patchArea = Rect(0, 0, parentSize.x, parentSize.y)
 
             // Intersect and test that there is an intersection
-            if (!patchArea.intersect(viewArea))
-                return;
+            if (!patchArea.intersect(viewArea)) {
+                return
+            }
 
             // Offset patch area to be relative to the view top left
-            patchArea.offset(-viewArea.left, -viewArea.top);
-
-            boolean area_unchanged = patchArea.equals(mPatchArea) && patchViewSize.equals(mPatchViewSize);
+            patchArea.offset(-viewArea.left, -viewArea.top)
+            val area_unchanged = patchArea == this.patchArea && patchViewSize == this.patchViewSize
 
             // If being asked for the same area as last time and not because of an update then nothing to do
-            if (area_unchanged && !update)
-                return;
-
-            boolean completeRedraw = !(area_unchanged && update);
+            if (area_unchanged && !update) return
+            val completeRedraw = !(area_unchanged && update)
 
             // Stop the drawing of previous patch if still going
-            if (mDrawPatch != null) {
-                mDrawPatch.cancel();
-                mDrawPatch = null;
-            }
+            drawPatch?.cancel()
+            drawPatch = null
 
             // Create and add the image view if not already done
-            if (mPatch == null) {
-                mPatch = new OpaqueImageView(mContext);
-                mPatch.setScaleType(ImageView.ScaleType.MATRIX);
-                addView(mPatch);
-                if (mSearchView != null)
-                    mSearchView.bringToFront();
+            if (patch == null) {
+                patch = OpaqueImageView(context).apply {
+                    scaleType = ImageView.ScaleType.MATRIX
+                }
+                addView(patch)
+                searchView?.bringToFront()
             }
 
-            CancellableTaskDefinition<Void, Boolean> task;
+            val task: CancellableTaskDefinition<Void?, Boolean?>? = if (completeRedraw) {
+                getDrawPageTask(
+                    patchBm, patchViewSize.x, patchViewSize.y,
+                    patchArea.left, patchArea.top,
+                    patchArea.width(), patchArea.height()
+                )
+            } else {
+                getUpdatePageTask(
+                    patchBm, patchViewSize.x, patchViewSize.y,
+                    patchArea.left, patchArea.top,
+                    patchArea.width(), patchArea.height()
+                )
+            }
 
-            if (completeRedraw)
-                task = getDrawPageTask(mPatchBm, patchViewSize.x, patchViewSize.y,
-                        patchArea.left, patchArea.top,
-                        patchArea.width(), patchArea.height());
-            else
-                task = getUpdatePageTask(mPatchBm, patchViewSize.x, patchViewSize.y,
-                        patchArea.left, patchArea.top,
-                        patchArea.width(), patchArea.height());
+            drawPatch = object : CancellableAsyncTask<Void?, Boolean?>(task) {
 
-            mDrawPatch = new CancellableAsyncTask<Void, Boolean>(task) {
-
-                public void onPostExecute(Boolean result) {
-                    if (result.booleanValue()) {
-                        mPatchViewSize = patchViewSize;
-                        mPatchArea = patchArea;
-                        clearRenderError();
-                        mPatch.setImageBitmap(mPatchBm);
-                        mPatch.invalidate();
+                override fun onPostExecute(result: Boolean?) {
+                    if (result == true) {
+                        this@PageView.patchViewSize = patchViewSize
+                        this@PageView.patchArea = patchArea
+                        clearRenderError()
+                        patch?.setImageBitmap(patchBm)
+                        patch?.invalidate()
                         //requestLayout();
                         // Calling requestLayout here doesn't lead to a later call to layout. No idea
                         // why, but apparently others have run into the problem.
-                        mPatch.layout(mPatchArea.left, mPatchArea.top, mPatchArea.right, mPatchArea.bottom);
+                        patch?.layout(
+                            this@PageView.patchArea!!.left,
+                            this@PageView.patchArea!!.top,
+                            this@PageView.patchArea!!.right,
+                            this@PageView.patchArea!!.bottom
+                        )
                     } else {
-                        setRenderError("Error rendering patch");
+                        setRenderError("Error rendering patch")
                     }
                 }
-            };
 
-            mDrawPatch.execute();
+            }
+
+            drawPatch?.execute()
         }
     }
 
-    public void update() {
-        // Cancel pending render task
-        if (mDrawEntire != null) {
-            mDrawEntire.cancel();
-            mDrawEntire = null;
-        }
+    fun update() {
 
-        if (mDrawPatch != null) {
-            mDrawPatch.cancel();
-            mDrawPatch = null;
-        }
+        // Cancel pending render task
+        drawEntire?.cancel()
+        drawEntire = null
+
+        drawPatch?.cancel()
+        drawPatch = null
 
         // Render the page in the background
-        mDrawEntire = new CancellableAsyncTask<Void, Boolean>(getUpdatePageTask(mEntireBm, mSize.x, mSize.y, 0, 0, mSize.x, mSize.y)) {
-
-            public void onPostExecute(Boolean result) {
-                if (result.booleanValue()) {
-                    clearRenderError();
-                    mEntire.setImageBitmap(mEntireBm);
-                    mEntire.invalidate();
+        drawEntire = object : CancellableAsyncTask<Void?, Boolean?>(
+            getUpdatePageTask(
+                entireBm,
+                size!!.x,
+                size!!.y,
+                0,
+                0,
+                size!!.x,
+                size!!.y
+            )
+        ) {
+            override fun onPostExecute(result: Boolean?) {
+                if (result == true) {
+                    clearRenderError()
+                    entire?.setImageBitmap(entireBm)
+                    entire?.invalidate()
                 } else {
-                    setRenderError("Error updating page");
+                    setRenderError("Error updating page")
                 }
             }
-        };
+        }
+        drawEntire?.execute()
 
-        mDrawEntire.execute();
+        updateHq(true)
 
-        updateHq(true);
     }
 
-    public void removeHq() {
+    fun removeHq() {
+
         // Stop the drawing of the patch if still going
-        if (mDrawPatch != null) {
-            mDrawPatch.cancel();
-            mDrawPatch = null;
-        }
+        drawPatch?.cancel()
+        drawPatch = null
 
         // And get rid of it
-        mPatchViewSize = null;
-        mPatchArea = null;
-        if (mPatch != null) {
-            mPatch.setImageBitmap(null);
-            mPatch.invalidate();
+        patchViewSize = null
+        patchArea = null
+
+        patch?.setImageBitmap(null)
+        patch?.invalidate()
+
+    }
+
+    override fun isOpaque(): Boolean {
+        return true
+    }
+
+    fun hitLink(link: Link): Int {
+
+        if (link.isExternal.not()) {
+            return muPDFCore.resolveLink(link)
         }
-    }
 
-    public int getPage() {
-        return mPageNumber;
-    }
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link.uri))
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
 
-    @Override
-    public boolean isOpaque() {
-        return true;
-    }
-
-    public int hitLink(Link link) {
-        if (link.isExternal()) {
-            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(link.getURI()));
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET); // API>=21: FLAG_ACTIVITY_NEW_DOCUMENT
-            try {
-                mContext.startActivity(intent);
-            } catch (FileUriExposedException x) {
-                Log.e(APP, x.toString());
-                Toast.makeText(getContext(), "Android does not allow following file:// link: " + link.getURI(), Toast.LENGTH_LONG).show();
-            } catch (Throwable x) {
-                Log.e(APP, x.toString());
-                Toast.makeText(getContext(), x.getMessage(), Toast.LENGTH_LONG).show();
-            }
-            return 0;
-        } else {
-            return mCore.resolveLink(link);
+        try {
+            context.startActivity(intent)
+        } catch (ex: FileUriExposedException) {
+            Log.e(TAG, ex.toString())
+            val message = "Android does not allow following file:// link: ${link.uri}"
+            Toast.makeText(getContext(), message, Toast.LENGTH_LONG).show()
+        } catch (ex: Throwable) {
+            Log.e(TAG, ex.toString())
+            Toast.makeText(getContext(), ex.message, Toast.LENGTH_LONG).show()
         }
+
+        return 0
+
     }
 
-    public int hitLink(float x, float y) {
+    fun hitLink(x: Float, y: Float): Int {
 
         // Since link highlighting was implemented, the super class
         // PageView has had sufficient information to be able to
         // perform this method directly. Making that change would
         // make MuPDFCore.hitLinkPage superfluous.
-        float scale = mSourceScale * (float) getWidth() / (float) mSize.x;
-        float docRelX = (x - getLeft()) / scale;
-        float docRelY = (y - getTop()) / scale;
-
-        if (mLinks != null) {
-            for (Link l : mLinks) {
-                if (l.getBounds().contains(docRelX, docRelY)) {
-                    return hitLink(l);
+        val scale = sourceScale * width.toFloat() / size!!.x.toFloat()
+        val docRelX = (x - left) / scale
+        val docRelY = (y - top) / scale
+        if (links != null) {
+            for (l in links!!) {
+                if (l.bounds.contains(docRelX, docRelY)) {
+                    return hitLink(l)
                 }
             }
         }
-
-        return 0;
-
+        return 0
     }
 
-    protected CancellableTaskDefinition<Void, Boolean> getDrawPageTask(
-            final Bitmap bm,
-            final int sizeX,
-            final int sizeY,
-            final int patchX,
-            final int patchY,
-            final int patchWidth,
-            final int patchHeight
-    ) {
-        return new MuPDFCancellableTaskDefinition<Void, Boolean>() {
-
-            @Override
-            public Boolean doInBackground(Cookie cookie, Void... params) {
-
-                if (bm == null) {
-                    return Boolean.FALSE;
+    protected fun getDrawPageTask(
+        bm: Bitmap?,
+        sizeX: Int,
+        sizeY: Int,
+        patchX: Int,
+        patchY: Int,
+        patchWidth: Int,
+        patchHeight: Int
+    ): CancellableTaskDefinition<Void?, Boolean?> {
+        return object : MuPDFCancellableTaskDefinition<Void?, Boolean?>() {
+            override fun doInBackground(cookie: Cookie?, vararg params: Void?): Boolean? {
+                return if (bm == null) {
+                    java.lang.Boolean.FALSE
+                } else try {
+                    muPDFCore.drawPage(
+                        bm,
+                        page,
+                        sizeX,
+                        sizeY,
+                        patchX,
+                        patchY,
+                        patchWidth,
+                        patchHeight,
+                        cookie
+                    )
+                    java.lang.Boolean.TRUE
+                } catch (e: RuntimeException) {
+                    java.lang.Boolean.FALSE
                 }
-
-                // Workaround bug in Android Honeycomb 3.x, where the bitmap generation count
-                // is not incremented when drawing.
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB &&
-                        Build.VERSION.SDK_INT < Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-                    bm.eraseColor(0);
-                }
-
-                try {
-                    mCore.drawPage(bm, mPageNumber, sizeX, sizeY, patchX, patchY, patchWidth, patchHeight, cookie);
-                    return Boolean.TRUE;
-                } catch (RuntimeException e) {
-                    return Boolean.FALSE;
-                }
-
             }
-        };
-
-    }
-
-    protected CancellableTaskDefinition<Void, Boolean> getUpdatePageTask(
-            final Bitmap bm,
-            final int sizeX,
-            final int sizeY,
-            final int patchX,
-            final int patchY,
-            final int patchWidth,
-            final int patchHeight
-    ) {
-
-        return new MuPDFCancellableTaskDefinition<Void, Boolean>() {
-
-            @Override
-            public Boolean doInBackground(Cookie cookie, Void... params) {
-
-                if (bm == null) {
-                    return Boolean.FALSE;
-                }
-
-                // Workaround bug in Android Honeycomb 3.x, where the bitmap generation count
-                // is not incremented when drawing.
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-                    bm.eraseColor(0);
-                }
-
-                try {
-                    mCore.updatePage(bm, mPageNumber, sizeX, sizeY, patchX, patchY, patchWidth, patchHeight, cookie);
-                    return Boolean.TRUE;
-                } catch (RuntimeException e) {
-                    return Boolean.FALSE;
-                }
-
-            }
-
-        };
-
-    }
-
-    protected Link[] getLinkInfo() {
-        try {
-            return mCore.getPageLinks(mPageNumber);
-        } catch (RuntimeException e) {
-            return null;
         }
+    }
+
+    protected fun getUpdatePageTask(
+        bm: Bitmap?,
+        sizeX: Int,
+        sizeY: Int,
+        patchX: Int,
+        patchY: Int,
+        patchWidth: Int,
+        patchHeight: Int
+    ): CancellableTaskDefinition<Void?, Boolean?> {
+        return object : MuPDFCancellableTaskDefinition<Void?, Boolean?>() {
+
+            override fun doInBackground(cookie: Cookie?, vararg params: Void?): Boolean? {
+                return if (bm == null) {
+                    java.lang.Boolean.FALSE
+                } else try {
+                    muPDFCore.updatePage(
+                        bm,
+                        page,
+                        sizeX,
+                        sizeY,
+                        patchX,
+                        patchY,
+                        patchWidth,
+                        patchHeight,
+                        cookie
+                    )
+                    java.lang.Boolean.TRUE
+                } catch (e: RuntimeException) {
+                    java.lang.Boolean.FALSE
+                }
+            }
+
+        }
+    }
+
+
+    companion object {
+
+        private const val TAG = "PageView"
+
+        private const val HIGHLIGHT_COLOR = -0x7f339a00
+        private const val LINK_COLOR = -0x7fff9934
+        private const val BOX_COLOR = -0xbbbb01
+        private const val BACKGROUND_COLOR = -0x1
+        private const val PROGRESS_DIALOG_DELAY = 200
     }
 
 }
