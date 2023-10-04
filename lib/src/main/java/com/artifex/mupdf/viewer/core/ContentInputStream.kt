@@ -1,96 +1,122 @@
-package com.artifex.mupdf.viewer.core;
+package com.artifex.mupdf.viewer.core
 
-import android.content.ContentResolver;
-import android.net.Uri;
-import android.util.Log;
+import android.content.ContentResolver
+import android.net.Uri
+import android.util.Log
+import com.artifex.mupdf.fitz.SeekableInputStream
+import com.artifex.mupdf.fitz.SeekableStream
+import java.io.IOException
+import java.io.InputStream
 
-import com.artifex.mupdf.fitz.SeekableInputStream;
+class ContentInputStream(
+    private var contentResolver: ContentResolver,
+    private var uri: Uri,
+    private var length: Long
+) : SeekableInputStream {
 
-import java.io.IOException;
-import java.io.InputStream;
+    private var inputStream: InputStream? = null
+    private var position: Long = 0
+    private var mustReopenStream = false
 
-public class ContentInputStream implements SeekableInputStream {
-
-    private final String APP = "MuPDF";
-
-    protected ContentResolver cr;
-    protected Uri uri;
-    protected InputStream is;
-    protected long length, p;
-    protected boolean mustReopenStream;
-
-    public ContentInputStream(ContentResolver cr, Uri uri, long size) throws IOException {
-        this.cr = cr;
-        this.uri = uri;
-        length = size;
-        mustReopenStream = false;
-        reopenStream();
+    init {
+        reopenStream()
     }
 
-    public long seek(long offset, int whence) throws IOException {
+    @Throws(IOException::class)
+    override fun seek(offset: Long, whence: Int): Long {
 
-        long newp = p;
+        val newPosition = when (whence) {
 
-        switch (whence) {
-            case SEEK_SET:
-                newp = offset;
-                break;
-            case SEEK_CUR:
-                newp = p + offset;
-                break;
-            case SEEK_END:
+            SeekableStream.SEEK_SET -> {
+                offset
+            }
+
+            SeekableStream.SEEK_CUR -> {
+                position + offset
+            }
+
+            SeekableStream.SEEK_END -> {
+
                 if (length < 0) {
-                    byte[] buf = new byte[16384];
-                    int k;
-                    while ((k = is.read(buf)) != -1)
-                        p += k;
-                    length = p;
+
+                    val buf = ByteArray(16384)
+                    var k: Int
+
+                    while (inputStream!!.read(buf).also { k = it } != -1) {
+                        position += k.toLong()
+                    }
+
+                    length = position
+
                 }
-                newp = length + offset;
-                break;
+
+                length + offset
+
+            }
+
+            else -> {
+                position
+            }
+
         }
 
-        if (newp < p) {
-            if (!mustReopenStream) {
+        if (newPosition < position) {
+
+            if (mustReopenStream.not()) {
                 try {
-                    is.skip(newp - p);
-                } catch (IOException x) {
-                    Log.i(APP, "Unable to skip backwards, reopening input stream");
-                    mustReopenStream = true;
+                    inputStream?.skip(newPosition - position)
+                } catch (x: IOException) {
+                    Log.i(TAG, "Unable to skip backwards, reopening input stream")
+                    mustReopenStream = true
                 }
             }
+
             if (mustReopenStream) {
-                reopenStream();
-                is.skip(newp);
+                reopenStream()
+                inputStream?.skip(newPosition)
             }
-        } else if (newp > p) {
-            is.skip(newp - p);
+
+        } else if (newPosition > position) {
+            inputStream?.skip(newPosition - position)
         }
 
-        return p = newp;
+        return newPosition.also { position = it }
+
     }
 
-    public long position() throws IOException {
-        return p;
+    @Throws(IOException::class)
+    override fun position(): Long {
+        return position
     }
 
-    public int read(byte[] buf) throws IOException {
-        int n = is.read(buf);
-        if (n > 0) {
-            p += n;
-        } else if (n < 0 && length < 0) {
-            length = p;
+    @Throws(IOException::class)
+    override fun read(buf: ByteArray): Int {
+
+        val bytesRead = inputStream?.read(buf) ?: 0
+
+        if (bytesRead > 0) {
+            position += bytesRead.toLong()
+        } else if (bytesRead < 0 && length < 0) {
+            length = position
         }
-        return n;
+
+        return bytesRead
     }
 
-    public void reopenStream() throws IOException {
-        if (is != null) {
-            is.close();
-            is = null;
-        }
-        is = cr.openInputStream(uri);
-        p = 0;
+    @Throws(IOException::class)
+    fun reopenStream() {
+
+        inputStream?.close()
+        inputStream = null
+
+        inputStream = contentResolver.openInputStream(uri)
+
+        position = 0
+
+    }
+
+    companion object {
+        private const val TAG: String = "ContentInputStream"
     }
 
 }
