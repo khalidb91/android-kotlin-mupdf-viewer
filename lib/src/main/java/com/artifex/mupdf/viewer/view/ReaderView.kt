@@ -15,7 +15,6 @@ import android.widget.Adapter
 import android.widget.AdapterView
 import android.widget.Scroller
 import com.artifex.mupdf.fitz.Link
-import com.artifex.mupdf.viewer.R
 import com.artifex.mupdf.viewer.model.SearchResult
 import java.util.LinkedList
 import java.util.Stack
@@ -786,7 +785,7 @@ abstract class ReaderView : AdapterView<Adapter?>, GestureDetector.OnGestureList
     }
 
     override fun setSelection(arg0: Int) {
-        throw UnsupportedOperationException(context?.getString(R.string.not_supported))
+        throw UnsupportedOperationException("Not supported")
     }
 
     private val cached: View?

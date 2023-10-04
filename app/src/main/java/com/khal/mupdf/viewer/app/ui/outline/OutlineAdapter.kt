@@ -4,8 +4,8 @@ import android.app.Activity
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
-import com.artifex.mupdf.viewer.app.databinding.ItemOutlineBinding
 import com.artifex.mupdf.viewer.model.OutlineItem
+import com.khal.mupdf.viewer.app.databinding.ItemOutlineBinding
 
 class OutlineAdapter(
     private val items: List<OutlineItem>,

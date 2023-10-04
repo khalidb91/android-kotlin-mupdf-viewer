@@ -7,11 +7,11 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
-import com.artifex.mupdf.viewer.app.R
 import com.artifex.mupdf.viewer.core.PickFileContract
-import com.artifex.mupdf.viewer.app.databinding.FragmentHomeBinding
-import com.khal.mupdf.viewer.app.ui.document.DocumentFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.khal.mupdf.viewer.app.R
+import com.khal.mupdf.viewer.app.databinding.FragmentHomeBinding
+import com.khal.mupdf.viewer.app.ui.document.DocumentFragment
 
 
 class HomeFragment : Fragment() {

@@ -1,6 +1,5 @@
 package com.artifex.mupdf.viewer.core
 
-import com.artifex.mupdf.viewer.R
 import com.artifex.mupdf.viewer.model.SearchDirection
 import com.artifex.mupdf.viewer.model.SearchResult
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +18,7 @@ abstract class SearchEngine(private val muPDFCore: MuPDFCore) {
 
     protected abstract fun onProgress(isLoading: Boolean)
 
-    protected abstract fun onError(messageId: Int)
+    protected abstract fun onError(failure: Failure)
 
 
     fun stop() {
@@ -51,8 +50,8 @@ abstract class SearchEngine(private val muPDFCore: MuPDFCore) {
                 if (result == null) {
 
                     val message = when {
-                        SearchResult.get() == null -> R.string.text_not_found
-                        else -> R.string.no_further_occurrences_found
+                        SearchResult.get() == null -> Failure.TextNotFound("Text not found")
+                        else -> Failure.NoFurtherOccurrencesFound("No further occurrences found")
                     }
 
                     onError(message)
@@ -92,6 +91,11 @@ abstract class SearchEngine(private val muPDFCore: MuPDFCore) {
         }
 
         return null
+    }
+
+    sealed class Failure() {
+        data class NoFurtherOccurrencesFound(val message: String?): Failure()
+        data class TextNotFound(val message: String?): Failure()
     }
 
 }

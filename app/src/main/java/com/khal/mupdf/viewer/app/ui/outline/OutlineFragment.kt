@@ -4,9 +4,9 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import com.artifex.mupdf.viewer.app.databinding.FragmentOulineBinding
 import com.artifex.mupdf.viewer.model.OutlineItem
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import com.khal.mupdf.viewer.app.databinding.FragmentOulineBinding
 
 
 open class OutlineFragment(

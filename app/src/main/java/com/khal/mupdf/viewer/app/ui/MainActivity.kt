@@ -2,7 +2,7 @@ package com.khal.mupdf.viewer.app.ui
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import com.artifex.mupdf.viewer.app.databinding.ActivityMainBinding
+import com.khal.mupdf.viewer.app.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
 

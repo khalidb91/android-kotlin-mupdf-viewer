@@ -20,19 +20,18 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
-import com.artifex.mupdf.viewer.app.R
-import com.artifex.mupdf.viewer.app.databinding.FragmentDocumentBinding
 import com.artifex.mupdf.viewer.model.OutlineItem
 import com.artifex.mupdf.viewer.model.SearchDirection
 import com.artifex.mupdf.viewer.model.SearchResult
 import com.artifex.mupdf.viewer.view.PageView
 import com.artifex.mupdf.viewer.view.ReaderView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.khal.mupdf.viewer.app.R
+import com.khal.mupdf.viewer.app.databinding.FragmentDocumentBinding
 import com.khal.mupdf.viewer.app.ui.document.DocumentViewModel.UiState
 import com.khal.mupdf.viewer.app.ui.outline.OutlineFragment
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import com.artifex.mupdf.viewer.R as libR
 
 
 class DocumentFragment : Fragment() {
@@ -271,7 +270,7 @@ class DocumentFragment : Fragment() {
             .setTitle(R.string.app_name)
             .setMessage(getString(R.string.enter_password))
             .setView(passwordView)
-            .setPositiveButton(getString(libR.string.okay)) { _, _ ->
+            .setPositiveButton(getString(R.string.okay)) { _, _ ->
 
                 val pwd = input.toString()
 
@@ -282,7 +281,7 @@ class DocumentFragment : Fragment() {
                 }
 
             }
-            .setNegativeButton(getString(libR.string.cancel)) { _, _ ->
+            .setNegativeButton(getString(R.string.cancel)) { _, _ ->
                 findNavController().navigateUp()
             }
             .show()

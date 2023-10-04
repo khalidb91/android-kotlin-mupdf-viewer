@@ -9,7 +9,6 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.artifex.mupdf.fitz.SeekableInputStream
-import com.artifex.mupdf.viewer.app.R
 import com.artifex.mupdf.viewer.core.ContentInputStream
 import com.artifex.mupdf.viewer.core.MuPDFCore
 import com.artifex.mupdf.viewer.core.SearchEngine
@@ -17,6 +16,7 @@ import com.artifex.mupdf.viewer.model.OutlineItem
 import com.artifex.mupdf.viewer.model.SearchDirection
 import com.artifex.mupdf.viewer.model.SearchResult
 import com.artifex.mupdf.viewer.view.PageAdapter
+import com.khal.mupdf.viewer.app.R
 import com.khal.mupdf.viewer.app.ui.home.HomeViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -113,9 +113,12 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
                 }
             }
 
-            override fun onError(messageId: Int) {
+            override fun onError(failure: Failure) {
                 viewModelScope.launch {
-                    uiState.emit(UiState.OnError(messageId))
+                    when (failure) {
+                        is Failure.TextNotFound -> R.string.text_not_found
+                        else -> R.string.no_further_occurrences_found
+                    }
                 }
             }
 
@@ -124,7 +127,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun onOutlineClick() {
-       val outlines = muPDFCore?.outline.orEmpty()
+        val outlines = muPDFCore?.getOutline().orEmpty()
         uiState.value = UiState.OnShowOutline(outlines)
     }
 
@@ -242,7 +245,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
             Log.i(HomeViewModel.TAG, "  Opening document from memory buffer of size " + buffer.size)
             openBuffer(
                 buffer = buffer,
-                magic = mimetype
+                mimetype = mimetype
             )
         } else {
             Log.i(HomeViewModel.TAG, "  Opening document from stream")
@@ -255,10 +258,10 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
 
     private fun openBuffer(
         buffer: ByteArray,
-        magic: String?,
+        mimetype: String?,
     ): MuPDFCore? {
         return try {
-            MuPDFCore(buffer, magic)
+            MuPDFCore(buffer, mimetype)
         } catch (e: Exception) {
             Log.e(HomeViewModel.TAG, "Error opening document buffer: $e")
             return null
@@ -355,7 +358,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
 
     fun setSearchMode(enabled: Boolean) {
         uiState.value = UiState.SearchMode(enabled)
-        if(enabled.not()){
+        if (enabled.not()) {
             SearchResult.set(null)
         }
     }
