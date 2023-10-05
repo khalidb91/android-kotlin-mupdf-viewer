@@ -28,7 +28,7 @@ import com.artifex.mupdf.viewer.view.ReaderView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.khal.mupdf.viewer.app.R
 import com.khal.mupdf.viewer.app.databinding.FragmentDocumentBinding
-import com.khal.mupdf.viewer.app.ui.document.DocumentViewModel.UiState
+import com.khal.mupdf.viewer.app.ui.document.DocumentViewModel.UiEvent
 import com.khal.mupdf.viewer.app.ui.outline.OutlineFragment
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -67,29 +67,29 @@ class DocumentFragment : Fragment() {
             viewModel.uiState.collectLatest { value ->
                 when (value) {
 
-                    is UiState.OnProgress -> {
+                    is UiEvent.Progress -> {
                         binding.progress.isVisible = value.isLoading
                     }
 
-                    is UiState.OnError -> {
+                    is UiEvent.Error -> {
                         onError(value.error)
                     }
 
-                    is UiState.OnLinkHighlight -> {
+                    is UiEvent.LinkHighlight -> {
                         setLinkHighlight(value.linkHighlight)
                     }
 
-                    is UiState.OnPageChange -> {
+                    is UiEvent.PageChange -> {
                         binding.pageNumber.text = value.pageNumber
                         binding.pageSlider.max = value.sliderMax
                         binding.pageSlider.progress = value.sliderProgress
                     }
 
-                    is UiState.OnRequestPassword -> {
+                    is UiEvent.RequestPassword -> {
                         requestPassword()
                     }
 
-                    is UiState.OnRelayoutDocument -> {
+                    is UiEvent.RelayoutDocument -> {
                         relayoutDocument(
                             layoutEM = value.layoutEm,
                             layoutH = value.layoutH,
@@ -97,11 +97,11 @@ class DocumentFragment : Fragment() {
                         )
                     }
 
-                    is UiState.OverlayVisibility -> {
+                    is UiEvent.OverlayVisibility -> {
                         setOverlayVisibility(value.isVisible)
                     }
 
-                    is UiState.SearchMode -> {
+                    is UiEvent.SearchMode -> {
                         if (value.isEnabled) {
                             //Focus on EditTextWidget
                             binding.searchView.requestFocus()
@@ -114,16 +114,16 @@ class DocumentFragment : Fragment() {
                         }
                     }
 
-                    is UiState.PageChange -> {
+                    is UiEvent.PageChangeByIndex -> {
                         docView?.pushHistory()
                         docView?.displayedViewIndex = value.index
                     }
 
-                    is UiState.OnTextFound -> {
+                    is UiEvent.TextFound -> {
                         onTextFound(value.result)
                     }
 
-                    is UiState.OnShowOutline -> {
+                    is UiEvent.ShowOutline -> {
                         showOutline(value.outlines)
                     }
 

@@ -47,31 +47,31 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
 
 
     val uiState by lazy {
-        MutableStateFlow<UiState?>(null)
+        MutableStateFlow<UiEvent?>(null)
     }
 
-    sealed class UiState {
-        object OnRequestPassword : UiState()
-        data class OnError(val error: Int) : UiState()
-        data class OnProgress(val isLoading: Boolean) : UiState()
-        data class OnPageChange(
+    sealed class UiEvent {
+        object RequestPassword : UiEvent()
+        data class Error(val error: Int) : UiEvent()
+        data class Progress(val isLoading: Boolean) : UiEvent()
+        data class PageChange(
             val pageNumber: String,
             val sliderMax: Int,
             val sliderProgress: Int
-        ) : UiState()
+        ) : UiEvent()
 
-        data class OnLinkHighlight(val linkHighlight: Boolean) : UiState()
-        data class OnRelayoutDocument(
+        data class LinkHighlight(val linkHighlight: Boolean) : UiEvent()
+        data class RelayoutDocument(
             val layoutEm: Int,
             val layoutW: Int,
             val layoutH: Int
-        ) : UiState()
+        ) : UiEvent()
 
-        data class OverlayVisibility(val isVisible: Boolean) : UiState()
-        data class SearchMode(val isEnabled: Boolean) : UiState()
-        data class PageChange(val index: Int) : UiState()
-        data class OnTextFound(val result: SearchResult) : UiState()
-        data class OnShowOutline(val outlines: List<OutlineItem>) : UiState()
+        data class OverlayVisibility(val isVisible: Boolean) : UiEvent()
+        data class SearchMode(val isEnabled: Boolean) : UiEvent()
+        data class PageChangeByIndex(val index: Int) : UiEvent()
+        data class TextFound(val result: SearchResult) : UiEvent()
+        data class  ShowOutline(val outlines: List<OutlineItem>) : UiEvent()
     }
 
     fun init(uri: Uri?) {
@@ -81,7 +81,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
         muPDFCore = getMuPdf(uri!!)
 
         if (muPDFCore?.needsPassword() == true) {
-            uiState.value = UiState.OnRequestPassword
+            uiState.value = UiEvent.RequestPassword
             return
         }
 
@@ -91,7 +91,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
 
         if (muPDFCore == null) {
             viewModelScope.launch {
-                uiState.emit(UiState.OnError(R.string.cannot_open_document))
+                uiState.emit(UiEvent.Error(R.string.cannot_open_document))
             }
             return
         }
@@ -107,13 +107,13 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
             override fun onTextFound(result: SearchResult) {
                 SearchResult.set(result)
                 viewModelScope.launch {
-                    uiState.emit(UiState.OnTextFound(result))
+                    uiState.emit(UiEvent.TextFound(result))
                 }
             }
 
             override fun onProgress(isLoading: Boolean) {
                 viewModelScope.launch {
-                    uiState.emit(UiState.OnProgress(isLoading))
+                    uiState.emit(UiEvent.Progress(isLoading))
                 }
             }
 
@@ -123,7 +123,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
                         is Failure.TextNotFound -> R.string.text_not_found
                         else -> R.string.no_further_occurrences_found
                     }
-                    uiState.emit(UiState.OnError(error))
+                    uiState.emit(UiEvent.Error(error))
                 }
             }
 
@@ -134,7 +134,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
     fun onOutlineClick() {
         val outlines = muPDFCore?.getOutline().orEmpty()
         viewModelScope.launch {
-            uiState.emit(UiState.OnShowOutline(outlines))
+            uiState.emit(UiEvent.ShowOutline(outlines))
         }
     }
 
@@ -298,7 +298,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
     fun toggleLinkHighlight() {
         linkHighlight = linkHighlight.not()
         viewModelScope.launch {
-            uiState.emit(UiState.OnLinkHighlight(linkHighlight))
+            uiState.emit(UiEvent.LinkHighlight(linkHighlight))
         }
     }
 
@@ -314,7 +314,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
             layoutEM = newLayoutEM
             viewModelScope.launch {
                 uiState.emit(
-                    UiState.OnRelayoutDocument(
+                    UiEvent.RelayoutDocument(
                         layoutEm = layoutEM,
                         layoutW = layoutW,
                         layoutH = layoutH
@@ -327,7 +327,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
     fun toggleOverlay() {
         isOverlayVisible = isOverlayVisible.not()
         viewModelScope.launch {
-            uiState.emit(UiState.OverlayVisibility(isOverlayVisible))
+            uiState.emit(UiEvent.OverlayVisibility(isOverlayVisible))
         }
     }
 
@@ -337,7 +337,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
         val max = ((muPDFCore?.countPages() ?: 0) - 1) * pageSliderRes
         val progress = (index * pageSliderRes)
         viewModelScope.launch {
-            uiState.emit(UiState.OnPageChange(pageNumber, max, progress))
+            uiState.emit(UiEvent.PageChange(pageNumber, max, progress))
         }
     }
 
@@ -368,7 +368,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
         layoutH = h * 72 / displayDPI
         viewModelScope.launch {
             uiState.emit(
-                UiState.OnRelayoutDocument(
+                UiEvent.RelayoutDocument(
                     layoutEm = layoutEM,
                     layoutW = layoutW,
                     layoutH = layoutH
@@ -379,7 +379,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
 
     fun setSearchMode(enabled: Boolean) {
         viewModelScope.launch {
-            uiState.emit(UiState.SearchMode(enabled))
+            uiState.emit(UiEvent.SearchMode(enabled))
         }
         if (enabled.not()) {
             SearchResult.set(null)
@@ -397,7 +397,7 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
     fun changePage(progress: Int) {
         val index = (progress + pageSliderRes / 2) / pageSliderRes
         viewModelScope.launch {
-            uiState.emit(UiState.PageChange(index))
+            uiState.emit(UiEvent.PageChangeByIndex(index))
         }
     }
 
